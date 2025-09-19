@@ -1,6 +1,6 @@
 import { UserStore } from '@/store/users';
 import { SelfStore } from '@/store/self';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { socket } from '@/api/socket';
 
 type MessageType = {
@@ -15,6 +15,7 @@ function ChatPage() {
   const [currentChat, setCurrentChat] = useState<number | null>(null);
   const [newMessage, setNewMessage] = useState<string>('');
   const [messages, setMessages] = useState<MessageType[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ثبت کاربر فقط یک بار هنگام mount یا تغییر self.id
   useEffect(() => {
@@ -52,15 +53,23 @@ function ChatPage() {
     };
 
     socket.emit('message', msg);
-    setMessages((prev) => [...prev, msg]); // نمایش فوری در چت فرستنده
+    setMessages((prev) => [...prev, msg]);
     setNewMessage('');
   };
 
-  // فیلتر پیام‌ها برای چت جاری
-  const filteredMessages = messages.filter(
-    (m) =>
-      (m.from === currentChat && m.to === self?.id) || (m.from === self?.id && m.to === currentChat)
-  );
+  // فیلتر پیام‌ها برای چت جاری و مرتب‌سازی بر اساس ترتیب ارسال
+  const filteredMessages = messages
+    .filter(
+      (m) =>
+        (m.from === currentChat && m.to === self?.id) ||
+        (m.from === self?.id && m.to === currentChat)
+    )
+    .sort(() => 0);
+
+  // scroll به آخر پیام‌ها
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [filteredMessages]);
 
   return (
     <div className="flex min-h-[90dvh] bg-gray-100">
@@ -86,27 +95,35 @@ function ChatPage() {
       <div className="flex-1 p-6 flex flex-col">
         {currentChat ? (
           <div className="flex-1 bg-white rounded-lg shadow-inner p-4 flex flex-col">
-            <div className="flex-1 overflow-y-auto">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">
-                Chat with {users.find((u) => u.id === currentChat)?.username}
-              </h3>
-              <div className="flex-1 overflow-y-auto border-t border-gray-200 pt-4">
-                {filteredMessages.length === 0 ? (
-                  <p className="text-gray-500">Messages will appear here...</p>
-                ) : (
-                  filteredMessages.map((msg, indx) => (
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">
+              Chat with {users.find((u) => u.id === currentChat)?.username}
+            </h3>
+
+            <div className="flex-1 overflow-y-auto border-t border-gray-200 pt-4 space-y-2">
+              {filteredMessages.length === 0 ? (
+                <p className="text-gray-500 text-center mt-4">Messages will appear here...</p>
+              ) : (
+                filteredMessages.map((msg, indx) => (
+                  <div
+                    key={indx}
+                    className={`flex ${msg.from === self?.id ? 'justify-end' : 'justify-start'}`}
+                  >
                     <p
-                      key={indx}
-                      className={`p-4 rounded-lg my-2 ${
-                        msg.from === self?.id ? 'bg-green-300' : 'bg-orange-100'
+                      className={`max-w-[60%] p-3 rounded-xl break-words ${
+                        msg.from === self?.id
+                          ? 'bg-green-400 text-white rounded-br-none'
+                          : 'bg-orange-200 text-gray-700 rounded-bl-none'
                       }`}
                     >
                       {msg.text}
                     </p>
-                  ))
-                )}
-              </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
             </div>
+
+            {/* textarea و دکمه ارسال */}
             <div className="mt-4 flex gap-3 items-end">
               <textarea
                 className="flex-1 border rounded-lg p-2 resize-none overflow-y-auto
